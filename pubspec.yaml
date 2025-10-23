@@ -58,7 +58,7 @@ dependencies:
   http: ^1.1.0
 
   # Analytics and Charts
-  fl_chart: ^0.68.0
+  fl_chart: ^1.1.1
   syncfusion_flutter_charts: ^31.2.2
 
 
