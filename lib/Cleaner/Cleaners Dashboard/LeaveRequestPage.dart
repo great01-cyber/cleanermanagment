@@ -27,7 +27,6 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
 
   @override
   void initState() {
-    super.initState();
     _userId = _auth.currentUser?.uid;
     // --- NEW: Fetch user data when page loads ---
     _fetchUserData();
@@ -52,9 +51,9 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
 
         // Extract the supervisorId and userName
         final supervisorId = data['supervisorId'] as String?;
-        final userName = data['fullName'] as String?; // or 'name', etc.
+        final name = data['supervisorName'] as String?; // or 'name', etc.
 
-        if (supervisorId == null || userName == null) {
+        if (supervisorId == null || name == null) {
           _showErrorSnackBar(
               "Profile incomplete (missing supervisor or name). Contact admin.");
         }
@@ -62,7 +61,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
         // Update the state
         setState(() {
           _mySupervisorId = supervisorId;
-          _myUserName = userName;
+          _myUserName = name;
           _isLoadingSupervisor = false;
         });
       } else {
