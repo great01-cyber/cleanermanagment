@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // --- NEW ---
+import 'package:firebase_auth/firebase_auth.dart';     // --- NEW ---
 
 class AnnualRequestPage extends StatefulWidget {
   @override
@@ -9,49 +11,62 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
   final TextEditingController _reasonController = TextEditingController();
-  // String? selectedLeaveType; // <-- REMOVED
+
+  // --- NEW: Firebase Instances ---
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  String? _userId;
 
   // --- Leave Day State Variables ---
   final int totalLeaveEntitlement = 38; // Total Annual Leave
   int usedLeaveDays = 0; // Used Annual Leave
   int get remainingLeaveDays => totalLeaveEntitlement - usedLeaveDays;
-  // ---
 
-  List<Map<String, String>> leaveHistory = [
-    // This will be counted (4 days)
-    {"date": "2024-02-15 to 2024-02-18", "type": "Annual Leave", "status": "Approved"},
-    // This will NOT be counted
-    {"date": "2024-04-01 to 2024-04-01", "type": "Sick Leave", "status": "Approved"},
-    // This will NOT be counted (it's Pending)
-    {"date": "2024-05-10 to 2024-05-12", "type": "Annual Leave", "status": "Pending"},
-  ];
+  // --- REMOVED: Hard-coded leaveHistory list ---
+  // List<Map<String, String>> leaveHistory = [ ... ];
 
   @override
   void initState() {
     super.initState();
-    _updateLeaveCount();
+    // --- NEW: Get the current user's ID ---
+    // This assumes the user is already logged in when visiting this page
+    _userId = _auth.currentUser?.uid;
+
+    // We no longer call _updateLeaveCount() here.
+    // The StreamBuilder will handle it when data is loaded.
   }
 
-  /// Calculates total used *Annual Leave* days from "Approved" requests
-  void _updateLeaveCount() {
+  /// --- MODIFIED: Calculates days from data snapshot ---
+  void _updateLeaveCount(List<QueryDocumentSnapshot> leaveDocs) {
     int calculatedDays = 0;
-    for (var entry in leaveHistory) {
-      // --- MODIFIED: Added check for "Annual Leave" type ---
-      if (entry["status"] == "Approved" && entry["type"] == "Annual Leave") {
-        calculatedDays += _calculateDaysFromEntry(entry["date"]!);
+    for (var doc in leaveDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      if (data["status"] == "Approved" && data["type"] == "Annual Leave") {
+        // Calculate from Timestamps
+        final Timestamp start = data['startDate'];
+        final Timestamp end = data['endDate'];
+        calculatedDays += _calculateDaysFromTimestamps(start, end);
       }
     }
-    setState(() {
-      usedLeaveDays = calculatedDays;
+
+    // --- NEW: Safely update state after build ---
+    // This prevents the "setState() called during build" error
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) { // Check if the widget is still in the tree
+        setState(() {
+          usedLeaveDays = calculatedDays;
+        });
+      }
     });
   }
 
-  /// Helper function to parse date strings and find the duration
-  int _calculateDaysFromEntry(String dateRange) {
+  /// --- MODIFIED: Helper function to calculate from Timestamps ---
+  int _calculateDaysFromTimestamps(Timestamp start, Timestamp end) {
     try {
-      final dates = dateRange.split(' to ');
-      final startDate = DateTime.parse(dates[0]);
-      final endDate = DateTime.parse(dates[1]);
+      final startDate = start.toDate();
+      final endDate = end.toDate();
+      // Add 1 to make the range inclusive (e.g., 15th to 18th is 4 days)
       return endDate.difference(startDate).inDays + 1;
     } catch (e) {
       print("Error parsing date: $e");
@@ -73,8 +88,8 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     }
   }
 
-  void _submitLeaveRequest() {
-    // --- MODIFIED: Removed check for selectedLeaveType ---
+  // --- MODIFIED: Now async and writes to Firestore ---
+  Future<void> _submitLeaveRequest() async {
     if (_startDateController.text.isEmpty ||
         _endDateController.text.isEmpty ||
         _reasonController.text.isEmpty) {
@@ -84,22 +99,51 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
       return;
     }
 
-    setState(() {
-      leaveHistory.add({
-        "date": "${_startDateController.text} to ${_endDateController.text}",
-        "type": "Annual Leave", // <-- HARD-CODED type
-        "status": "Pending"
+    // --- NEW: Check for user ID ---
+    if (_userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: You must be logged in.")),
+      );
+      return;
+    }
+
+    try {
+      // --- NEW: Convert string dates to DateTime objects ---
+      final DateTime startDate = DateTime.parse(_startDateController.text);
+      final DateTime endDate = DateTime.parse(_endDateController.text);
+
+      if(endDate.isBefore(startDate)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("End date cannot be before start date.")),
+        );
+        return;
+      }
+
+      // --- NEW: Add data to Firestore 'leave_requests' collection ---
+      await _db.collection('leave_requests').add({
+        'userId': _userId,
+        'startDate': Timestamp.fromDate(startDate), // Use Timestamp for dates
+        'endDate': Timestamp.fromDate(endDate),     // Use Timestamp for dates
+        'reason': _reasonController.text,
+        'type': "Annual Leave", // Hard-coded as in your original
+        'status': "Pending",
+        'createdAt': FieldValue.serverTimestamp(), // Good for sorting
       });
-    });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Annual Leave request submitted successfully!")),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Annual Leave request submitted successfully!")),
+      );
 
-    _startDateController.clear();
-    _endDateController.clear();
-    _reasonController.clear();
-    // setState(() { selectedLeaveType = null; }); // <-- REMOVED
+      _startDateController.clear();
+      _endDateController.clear();
+      _reasonController.clear();
+
+    } catch (e) {
+      print("Error submitting leave request: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error submitting request: $e")),
+      );
+    }
   }
 
   @override
@@ -114,7 +158,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
         padding: EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // --- Leave Counter Card ---
+            // --- Leave Counter Card (No changes here) ---
             Card(
               elevation: 5,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -142,7 +186,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
             ),
             SizedBox(height: 20),
 
-            // --- Leave Request Form Card ---
+            // --- Leave Request Form Card (No changes here) ---
             Card(
               elevation: 5,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -157,14 +201,8 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                     SizedBox(height: 15),
                     _buildTextField(_endDateController, "End Date", Icons.calendar_today, () => _selectDate(_endDateController)),
                     SizedBox(height: 15),
-
-                    // --- REMOVED Leave Type Dropdown ---
-
-                    // --- Reason Field ---
                     _buildTextField(_reasonController, "Reason", Icons.edit, null, maxLines: 3),
                     SizedBox(height: 20),
-
-                    // Submit Button
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -188,48 +226,99 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
 
             SizedBox(height: 25),
 
-            // --- Leave History Section ---
+            // --- MODIFIED: Leave History Section ---
             Text("Leave Request History", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
             SizedBox(height: 10),
-            ...leaveHistory.map((entry) {
-              // Determine color for the chip
-              Color statusColor;
-              Color backgroundColor;
-              if (entry["status"] == "Approved") {
-                statusColor = Colors.green;
-                backgroundColor = Colors.green[100]!;
-              } else if (entry["status"] == "Pending") {
-                statusColor = Colors.orange;
-                backgroundColor = Colors.orange[100]!;
-              } else {
-                statusColor = Colors.red;
-                backgroundColor = Colors.red[100]!;
-              }
 
-              return Card(
-                color: Colors.grey[100],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                child: ListTile(
-                  leading: Icon(
-                      entry["type"] == "Annual Leave" ? Icons.beach_access : Icons.medical_services,
-                      color: Colors.green
-                  ),
-                  title: Text(entry["type"]!, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  subtitle: Text(entry["date"]!, style: TextStyle(fontSize: 14)),
-                  trailing: Chip(
-                    label: Text(entry["status"]!, style: TextStyle(color: statusColor)),
-                    backgroundColor: backgroundColor,
-                  ),
-                ),
-              );
-            }).toList(),
+            // --- NEW: StreamBuilder to read live data from Firestore ---
+            StreamBuilder<QuerySnapshot>(
+              // Listen to the collection, filtered by the current user's ID
+              stream: _db
+                  .collection('leave_requests')
+                  .where('userId', isEqualTo: _userId)
+                  .orderBy('createdAt', descending: true) // Show newest first
+                  .snapshots(),
+              builder: (context, snapshot) {
+                // Handle loading state
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
+                // Handle errors
+                if (snapshot.hasError) {
+                  return Center(child: Text("Error loading data: ${snapshot.error}"));
+                }
+                // Handle no data
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  _updateLeaveCount([]); // Update count to 0
+                  return Center(child: Text("No leave requests found."));
+                }
+
+                // --- NEW: Get the list of documents ---
+                final leaveDocs = snapshot.data!.docs;
+
+                // --- NEW: Update the "Used" days count based on this data ---
+                _updateLeaveCount(leaveDocs);
+
+                // --- NEW: Use ListView.builder to display the list ---
+                return ListView.builder(
+                  // We are inside a SingleChildScrollView, so we must add these:
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: leaveDocs.length,
+                  itemBuilder: (context, index) {
+                    final doc = leaveDocs[index];
+                    final data = doc.data() as Map<String, dynamic>;
+
+                    // --- NEW: Get data from the document ---
+                    final String type = data['type'] ?? 'Unknown';
+                    final String status = data['status'] ?? 'Unknown';
+
+                    // --- NEW: Format Timestamps back to strings for display ---
+                    final String startDate = (data['startDate'] as Timestamp).toDate().toLocal().toString().split(' ')[0];
+                    final String endDate = (data['endDate'] as Timestamp).toDate().toLocal().toString().split(' ')[0];
+                    final String dateRange = "$startDate to $endDate";
+
+                    // Determine color for the chip
+                    Color statusColor;
+                    Color backgroundColor;
+                    if (status == "Approved") {
+                      statusColor = Colors.green;
+                      backgroundColor = Colors.green[100]!;
+                    } else if (status == "Pending") {
+                      statusColor = Colors.orange;
+                      backgroundColor = Colors.orange[100]!;
+                    } else { // "Rejected" or other
+                      statusColor = Colors.red;
+                      backgroundColor = Colors.red[100]!;
+                    }
+
+                    return Card(
+                      color: Colors.grey[100],
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      child: ListTile(
+                        leading: Icon(
+                            type == "Annual Leave" ? Icons.beach_access : Icons.medical_services,
+                            color: Colors.green
+                        ),
+                        title: Text(type, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        subtitle: Text(dateRange, style: TextStyle(fontSize: 14)),
+                        trailing: Chip(
+                          label: Text(status, style: TextStyle(color: statusColor)),
+                          backgroundColor: backgroundColor,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// Helper widget for the stats card
+  /// Helper widget for the stats card (No changes here)
   Widget _buildLeaveStat(String label, String value, {bool isRemaining = false}) {
     return Column(
       children: [
@@ -250,7 +339,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     );
   }
 
-  /// Helper widget for building text fields
+  /// Helper widget for building text fields (No changes here)
   Widget _buildTextField(TextEditingController controller, String label, IconData icon, VoidCallback? onTap, {int maxLines = 1}) {
     return TextField(
       controller: controller,

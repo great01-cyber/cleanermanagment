@@ -12,6 +12,7 @@ import 'PostMessage.dart';
 import 'PostShifts.dart';
 import 'StoreInventoryPage.dart';
 import '../ShiftManagement/ShiftManagementScreen.dart';
+import 'SupervisorApprovalPage.dart';
 
 class SupervisorDashboard extends StatefulWidget {
   const SupervisorDashboard({super.key});
@@ -75,6 +76,7 @@ List<Widget> _buildDrawerItems(BuildContext context) {
     _buildDrawerTile(context, 'Create Notification', Icons.notifications, CreateNotification()),
     _buildDrawerTile(context, 'Report Accidents', Icons.notifications, CleanerReportAccidents()),
     _buildDrawerTile(context, 'Emergency', Icons.emergency, OrderSuppliesPage()),
+    _buildDrawerTile(context, 'Annual Leave Request', Icons.emergency, SupervisorApprovalPage()),
     ListTile(
       leading: Icon(Icons.logout, color: Colors.redAccent),
       title: Text('Logout', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
@@ -106,7 +108,8 @@ List<Widget> _buildDashboardButtons(BuildContext context) {
     _buildDashboardButton(context, 'Reports', Icons.report, Colors.teal, ReportsIssuesS()),
     _buildDashboardButton(context, 'Create Notification', Icons.notifications, Colors.purple, CreateNotification()),
     _buildDashboardButton(context, 'Order Supplies', Icons.inventory, Colors.red, OrderSuppliesPage()),
-    _buildDashboardButton(context, 'Accidents/Near Misses/ Incidents/ Slips', Icons.inventory, Colors.red, CleanerReportAccidents())
+    _buildDashboardButton(context, 'Accidents/Near Misses/ Incidents/ Slips', Icons.inventory, Colors.red, CleanerReportAccidents()),
+    _buildDashboardButton(context, 'Annual Leave', Icons.inventory, Colors.red, SupervisorApprovalPage())
 
   ];
 }
