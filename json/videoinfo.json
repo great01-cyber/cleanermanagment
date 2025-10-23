@@ -1,0 +1,40 @@
+[
+  {
+    "title": "Washing of Sink",
+    "time": "45 seconds",
+    "thumbnail": "assets/images/squat1.png",
+    "videoUrl": "https://st.bslmeiyu.com/uploads/20170706/The%20Bananas%20Song%20%20Counting%20Bananas%20%20Super%20Simple%20Songs.mp4"
+  },
+  {
+    "title": "Restocking the blue rolls",
+    "time": "55 seconds",
+    "thumbnail": "assets/images/squat2.png",
+    "videoUrl": "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4"
+  },
+  {
+    "title": "Using the i-mop",
+    "time": "60 seconds",
+    "thumbnail": "assets/images/squat3.png",
+    "videoUrl": "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4"
+  },
+  {
+    "title": "Mixing of chemicals",
+    "time": "120 seconds",
+    "thumbnail": "assets/images/squat4.png",
+    "videoUrl": "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4"
+  },
+  {
+    "title": "Using the Rug Cleaner",
+    "time": "120 seconds",
+    "thumbnail": "assets/images/squat5.png",
+    "videoUrl": "https://www.google.com/search?q=how+to+clean+a+mirror+as+a+cleaer&oq=how+to+clean+a+mirror+as+a+cleaer&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIJCAEQIRgKGKABMgkIAhAhGAoYoAEyBwgDECEYjwLSAQkxMTYyNGowajmoAgCwAgE&sourceid=chrome&ie=UTF-8#fpstate=ive&vld=cid:1751734e,vid:iCnGgC9AFhM,st:0.mp4"
+  },
+  {
+    "title": "Cleaning a mirror",
+    "time": "120 seconds",
+    "thumbnail": "assets/images/squat6.png",
+    "videoUrl": "https://www.google.com/search?q=how+to+clean+a+mirror+as+a+cleaer&oq=how+to+clean+a+mirror+as+a+cleaer&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIJCAEQIRgKGKABMgkIAhAhGAoYoAEyBwgDECEYjwLSAQkxMTYyNGowajmoAgCwAgE&sourceid=chrome&ie=UTF-8#fpstate=ive&vld=cid:1751734e,vid:iCnGgC9AFhM,st:0.mp4"
+  }
+
+
+]
