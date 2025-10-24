@@ -18,7 +18,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   String? _userId;
 
-  // --- NEW: User Data State ---
+  // --- User Data State ---
   String? _mySupervisorId;
   String? _myUserName;
   bool _isLoadingSupervisor = true; // Start as true
@@ -28,12 +28,12 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
 
   @override
   void initState() {
+    super.initState(); // <-- Don't forget super.initState()
     _userId = _auth.currentUser?.uid;
-    // --- NEW: Fetch user data when page loads ---
     _fetchUserData();
   }
 
-  // --- NEW: Function to fetch user's supervisor and name ---
+  // --- MODIFIED: Fixed 'fullName' bug ---
   Future<void> _fetchUserData() async {
     if (_userId == null) {
       setState(() {
@@ -52,7 +52,8 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
 
         // Extract the supervisorId and userName
         final supervisorId = data['supervisorId'] as String?;
-        final name = data['supervisorName'] as String?; // or 'name', etc.
+        // --- FIX: This should be the employee's name, not supervisor's ---
+        final name = data['fullName'] as String?; // or 'name', etc.
 
         if (supervisorId == null || name == null) {
           _showErrorSnackBar(
@@ -80,7 +81,6 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     }
   }
 
-  // --- NEW: Helper for showing errors ---
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -88,19 +88,27 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     );
   }
 
-  /// Calculates used days from a list of documents.
-  int _calculateUsedDays(List<QueryDocumentSnapshot> leaveDocs) {
-    int calculatedDays = 0;
+  // --- NEW: Calculates all stats in one pass (for pie chart) ---
+  Map<String, int> _calculateLeaveStats(List<QueryDocumentSnapshot> leaveDocs) {
+    int approvedDays = 0;
+    int pendingDays = 0;
+
     for (var doc in leaveDocs) {
       final data = doc.data() as Map<String, dynamic>;
-
-      if (data["status"] == "Approved" && data["type"] == "Annual Leave") {
+      // We only care about Annual Leave for this page
+      if (data["type"] == "Annual Leave") {
         final Timestamp start = data['startDate'];
         final Timestamp end = data['endDate'];
-        calculatedDays += _calculateDaysFromTimestamps(start, end);
+        int days = _calculateDaysFromTimestamps(start, end);
+
+        if (data["status"] == "Approved") {
+          approvedDays += days;
+        } else if (data["status"] == "Pending") {
+          pendingDays += days;
+        }
       }
     }
-    return calculatedDays;
+    return {'approved': approvedDays, 'pending': pendingDays};
   }
 
   /// Helper function to calculate from Timestamps
@@ -116,21 +124,51 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     }
   }
 
-  Future<void> _selectDate(TextEditingController controller) async {
+  // --- NEW: Function just for the Start Date ---
+  Future<void> _selectStartDate() async {
     DateTime? picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
-      firstDate: DateTime(2024),
+      // --- FIX: firstDate is now dynamic ---
+      firstDate: DateTime.now(),
       lastDate: DateTime(2030),
     );
     if (picked != null) {
       setState(() {
-        controller.text = picked.toLocal().toString().split(' ')[0];
+        _startDateController.text = picked.toLocal().toString().split(' ')[0];
+        // --- NEW: Clear end date if start date changes ---
+        _endDateController.clear();
       });
     }
   }
 
-  // --- MODIFIED: Now includes supervisorId and userName ---
+  // --- NEW: Function just for the End Date ---
+  Future<void> _selectEndDate() async {
+    // Check if start date is selected first
+    if (_startDateController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Please select a start date first")),
+      );
+      return;
+    }
+
+    final DateTime startDate = DateTime.parse(_startDateController.text);
+
+    DateTime? picked = await showDatePicker(
+      context: context,
+      // --- FIX: Initial and first dates are based on the start date ---
+      initialDate: startDate,
+      firstDate: startDate,
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) {
+      setState(() {
+        _endDateController.text = picked.toLocal().toString().split(' ')[0];
+      });
+    }
+  }
+
+  // --- MODIFIED: Includes daysRequested field ---
   Future<void> _submitLeaveRequest() async {
     if (_startDateController.text.isEmpty ||
         _endDateController.text.isEmpty ||
@@ -146,7 +184,6 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
       return;
     }
 
-    // --- NEW: Check if supervisor data is loaded ---
     if (_isLoadingSupervisor) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Still loading user data, please wait...")),
@@ -154,7 +191,6 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
       return;
     }
 
-    // --- NEW: Check if supervisor/name was found ---
     if (_mySupervisorId == null || _myUserName == null) {
       _showErrorSnackBar(
           "Cannot submit: User profile is incomplete. Please contact admin.");
@@ -172,14 +208,18 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
         return;
       }
 
-      // --- NEW: Add data to Firestore 'leave_requests' collection ---
+      // --- FIX: Define and calculate daysRequested HERE ---
+      final int daysRequested = endDate.difference(startDate).inDays + 1;
+
+      // --- Add data to Firestore 'leave_requests' collection ---
       await _db.collection('leave_requests').add({
         'userId': _userId,
-        'userName': _myUserName, // <-- ADDED
-        'supervisorId': _mySupervisorId, // <-- ADDED
+        'userName': _myUserName,
+        'supervisorId': _mySupervisorId,
         'startDate': Timestamp.fromDate(startDate),
         'endDate': Timestamp.fromDate(endDate),
         'reason': _reasonController.text,
+        'daysRequested': daysRequested, // <-- THE FIX
         'type': "Annual Leave",
         'status': "Pending",
         'createdAt': FieldValue.serverTimestamp(),
@@ -207,7 +247,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
         backgroundColor: Colors.green,
         elevation: 4,
       ),
-      // --- MODIFIED: StreamBuilder now wraps the entire body ---
+      // --- MODIFIED: StreamBuilder now calculates all stats ---
       body: StreamBuilder<QuerySnapshot>(
         stream: _db
             .collection('leave_requests')
@@ -227,27 +267,32 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
           // --- Data is loaded (or empty) ---
           final leaveDocs = snapshot.data?.docs ?? [];
 
-          // 1. CALCULATE used days right here
-          final int calculatedUsedDays = _calculateUsedDays(leaveDocs);
+          // --- MODIFIED: Calculate all stats for pie chart ---
+          final Map<String, int> stats = _calculateLeaveStats(leaveDocs);
+          final int usedDays = stats['approved'] ?? 0;
+          final int pendingDays = stats['pending'] ?? 0;
 
-          // 2. BUILD the page content using the calculated data
-          return _buildPageContent(context, calculatedUsedDays, leaveDocs);
+          // --- MODIFIED: Pass all stats to the build method ---
+          return _buildPageContent(
+              context, usedDays, pendingDays, leaveDocs);
         },
       ),
     );
   }
 
-  // --- NEW: Helper method to build the page content ---
-  Widget _buildPageContent(
-      BuildContext context, int usedDays, List<QueryDocumentSnapshot> leaveDocs) {
-    // Calculate remaining days locally
-    final int remainingDays = totalLeaveEntitlement - usedDays;
+  // --- MODIFIED: Now accepts 'pendingDays' ---
+  Widget _buildPageContent(BuildContext context, int usedDays, int pendingDays,
+      List<QueryDocumentSnapshot> leaveDocs) {
+    // --- MODIFIED: More accurate remaining days calculation ---
+    final int remainingDays =
+    (totalLeaveEntitlement - usedDays - pendingDays)
+        .clamp(0, totalLeaveEntitlement);
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(16.0),
       child: Column(
         children: [
-          // --- Leave Counter Card (Now uses 'usedDays' parameter) ---
+          // --- MODIFIED: Leave Counter Card now has Pie Chart ---
           Card(
             elevation: 5,
             shape:
@@ -264,14 +309,25 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                         fontWeight: FontWeight.bold,
                         color: Colors.green[800]),
                   ),
-                  SizedBox(height: 12),
+                  SizedBox(height: 16),
+                  // --- RE-ADDED: Pie Chart Widget ---
+                  SizedBox(
+                    height: 150,
+                    child: _buildPieChart(
+                        context, usedDays, pendingDays, remainingDays),
+                  ),
+                  SizedBox(height: 16),
+                  // --- MODIFIED: Row now includes "Pending" ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildLeaveStat(
-                          "Total Days", totalLeaveEntitlement.toString()),
-                      _buildLeaveStat("Used Days", usedDays.toString()),
-                      _buildLeaveStat("Days Remaining", remainingDays.toString(),
+                          "Total", totalLeaveEntitlement.toString()),
+                      _buildLeaveStat("Used", usedDays.toString(),
+                          color: Colors.red[700]),
+                      _buildLeaveStat("Pending", pendingDays.toString(),
+                          color: Colors.orange[700]),
+                      _buildLeaveStat("Remaining", remainingDays.toString(),
                           isRemaining: true),
                     ],
                   ),
@@ -281,7 +337,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
           ),
           SizedBox(height: 20),
 
-          // --- Leave Request Form Card (MODIFIED button) ---
+          // --- Leave Request Form Card (FIXED) ---
           Card(
             elevation: 5,
             shape:
@@ -297,21 +353,24 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                           fontWeight: FontWeight.bold,
                           color: Colors.green)),
                   SizedBox(height: 15),
+                  // --- FIX: Calls the correct function ---
                   _buildTextField(_startDateController, "Start Date",
-                      Icons.calendar_today, () => _selectDate(_startDateController)),
+                      Icons.calendar_today, () => _selectStartDate()),
                   SizedBox(height: 15),
+                  // --- FIX: Calls the correct function ---
                   _buildTextField(_endDateController, "End Date",
-                      Icons.calendar_today, () => _selectDate(_endDateController)),
+                      Icons.calendar_today, () => _selectEndDate()),
                   SizedBox(height: 15),
                   _buildTextField(_reasonController, "Reason", Icons.edit, null,
                       maxLines: 3),
                   SizedBox(height: 20),
+                  // --- FIX: Button is here, by itself ---
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      // --- MODIFIED: Disable button while loading supervisor data ---
-                      onPressed: _isLoadingSupervisor ? null : _submitLeaveRequest,
+                      onPressed:
+                      _isLoadingSupervisor ? null : _submitLeaveRequest,
                       style: ElevatedButton.styleFrom(
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
@@ -319,7 +378,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                         backgroundColor: Colors.green,
                         disabledBackgroundColor: Colors.grey.shade400,
                       ),
-                      // --- MODIFIED: Show loader or text ---
+                      // --- FIX: Child is the Text/Indicator ---
                       child: _isLoadingSupervisor
                           ? CircularProgressIndicator(color: Colors.white)
                           : Text(
@@ -338,7 +397,6 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
 
           SizedBox(height: 25),
 
-          // --- MODIFIED: Leave History Section ---
           Text("Leave Request History",
               style: TextStyle(
                   fontSize: 18,
@@ -346,12 +404,10 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                   color: Colors.green)),
           SizedBox(height: 10),
 
-          // --- MODIFIED: No StreamBuilder here. Just build from the list. ---
+          // --- ListView.builder with "Decline Reason" logic ---
           if (leaveDocs.isEmpty)
             Center(child: Text("No leave requests found."))
           else
-          // --- MODIFIED: This entire ListView.builder is updated ---
-          // --- MODIFIED: This entire ListView.builder is updated ---
             ListView.builder(
               shrinkWrap: true,
               physics: NeverScrollableScrollPhysics(),
@@ -360,11 +416,10 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                 final doc = leaveDocs[index];
                 final data = doc.data() as Map<String, dynamic>;
 
-                // --- Get all the data fields ---
                 final String type = data['type'] ?? 'Unknown';
                 final String status = data['status'] ?? 'Unknown';
-                // --- NEW: Get the supervisor's reason ---
-                final String reason = data['supervisorReason'] ?? 'No reason provided.';
+                final String reason =
+                    data['supervisorReason'] ?? 'No reason provided.';
 
                 final String startDate = (data['startDate'] as Timestamp)
                     .toDate()
@@ -378,7 +433,6 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                     .split(' ')[0];
                 final String dateRange = "$startDate to $endDate";
 
-                // --- Determine color for the chip ---
                 Color statusColor;
                 Color backgroundColor;
                 if (status == "Approved") {
@@ -387,36 +441,34 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                 } else if (status == "Pending") {
                   statusColor = Colors.orange;
                   backgroundColor = Colors.orange[100]!;
-                } else { // "Declined" or other
+                } else {
                   statusColor = Colors.red;
                   backgroundColor = Colors.red[100]!;
                 }
 
-                // --- NEW: Build the trailing widget conditionally ---
                 Widget trailingWidget;
-
                 if (status == "Declined") {
-                  // If declined, show Chip + Icon in a Row
                   trailingWidget = Row(
-                    mainAxisSize: MainAxisSize.min, // Crucial for a Row in a ListTile
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Chip(
-                        label:
-                        Text(status, style: TextStyle(color: statusColor)),
+                        label: Text(status,
+                            style: TextStyle(color: statusColor)),
                         backgroundColor: backgroundColor,
                       ),
-                      SizedBox(width: 8), // Spacing
+                      SizedBox(width: 8),
                       IconButton(
-                        icon: Icon(Icons.comment_rounded, color: Colors.blueGrey),
+                        icon: Icon(Icons.comment_rounded,
+                            color: Colors.blueGrey),
                         onPressed: () => _showDeclineReason(reason),
                         tooltip: 'View Reason',
                       ),
                     ],
                   );
                 } else {
-                  // Otherwise, just show the Chip
                   trailingWidget = Chip(
-                    label: Text(status, style: TextStyle(color: statusColor)),
+                    label:
+                    Text(status, style: TextStyle(color: statusColor)),
                     backgroundColor: backgroundColor,
                   );
                 }
@@ -436,7 +488,6 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                             fontSize: 16, fontWeight: FontWeight.bold)),
                     subtitle:
                     Text(dateRange, style: TextStyle(fontSize: 14)),
-                    // --- MODIFIED: Use the new conditional widget ---
                     trailing: trailingWidget,
                   ),
                 );
@@ -447,8 +498,9 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     );
   }
 
-  /// Helper widget for the stats card
-  Widget _buildLeaveStat(String label, String value, {bool isRemaining = false}) {
+  // --- MODIFIED: This is the only version of _buildLeaveStat needed ---
+  Widget _buildLeaveStat(String label, String value,
+      {bool isRemaining = false, Color? color}) {
     return Column(
       children: [
         Text(
@@ -461,7 +513,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: isRemaining ? Colors.green[700] : Colors.black87,
+            color: isRemaining ? Colors.green[700] : (color ?? Colors.black87),
           ),
         ),
       ],
@@ -487,13 +539,13 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
       ),
     );
   }
-  // --- NEW: Add this function to show the decline reason ---
+
+  // --- Function to show the decline reason ---
   void _showDeclineReason(String reason) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text("Reason for Decline"),
-        // Use a ScrollView in case the reason is very long
         content: SingleChildScrollView(
           child: Text(reason.isEmpty ? "No reason provided." : reason),
         ),
@@ -506,12 +558,12 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
       ),
     );
   }
+
+  // --- Function to build the pie chart ---
   Widget _buildPieChart(
       BuildContext context, int usedDays, int pendingDays, int remainingDays) {
-    // This list will hold the slices
     List<PieChartSectionData> sections = [];
 
-    // Only add slices if their value is greater than 0
     if (usedDays > 0) {
       sections.add(PieChartSectionData(
         color: Colors.red[400],
@@ -532,6 +584,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
             fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
       ));
     }
+    // Only show remaining if it's greater than 0
     if (remainingDays > 0) {
       sections.add(PieChartSectionData(
         color: Colors.green[400],
@@ -543,12 +596,12 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
       ));
     }
 
-    // If all are 0, show a simple "empty" chart
+    // If all are 0, show a simple "empty" chart (full green)
     if (sections.isEmpty) {
       sections.add(PieChartSectionData(
-        color: Colors.grey[300],
-        value: 1, // Must have some value
-        title: 'No Data',
+        color: Colors.green[400], // Start with a full "Free" chart
+        value: totalLeaveEntitlement.toDouble(),
+        title: '$totalLeaveEntitlement\nFree',
         radius: 50,
         titleStyle: TextStyle(
             fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
@@ -563,53 +616,12 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
           },
         ),
         borderData: FlBorderData(show: false),
-        sectionsSpace: 2, // Space between slices
-        centerSpaceRadius: 40, // Makes it a donut chart
+        sectionsSpace: 2,
+        centerSpaceRadius: 40,
         sections: sections,
       ),
     );
   }
 
-  // --- MODIFIED: Helper widget for the stats card now accepts a color ---
-  Widget _buildLeaveStat2(String label, String value,
-      {bool isRemaining = false, Color? color}) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-        ),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: isRemaining ? Colors.green[700] : (color ?? Colors.black87),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Helper widget for building text fields
-  Widget _buildTextField1(TextEditingController controller, String label,
-      IconData icon, VoidCallback? onTap,
-      {int maxLines = 1}) {
-    // ... (This function is unchanged)
-    return TextField(
-      controller: controller,
-      readOnly: onTap != null,
-      maxLines: maxLines,
-      onTap: onTap,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: Colors.green),
-        filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-      ),
-    );
-  }
+// --- DELETED: _buildLeaveStat2 and _buildTextField1 ---
 }
