@@ -622,6 +622,4 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
       ),
     );
   }
-
-// --- DELETED: _buildLeaveStat2 and _buildTextField1 ---
 }
