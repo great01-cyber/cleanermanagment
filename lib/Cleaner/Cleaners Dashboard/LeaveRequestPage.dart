@@ -51,8 +51,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
 
         // Extract the supervisorId and userName
         final supervisorId = data['supervisorId'] as String?;
-        // --- FIX: This should be the employee's name, not supervisor's ---
-        final name = data['fullName'] as String?; // or 'name', etc.
+        final name = data['name'] as String?;
 
         if (supervisorId == null || name == null) {
           _showErrorSnackBar(
