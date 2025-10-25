@@ -28,12 +28,11 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
 
   @override
   void initState() {
-    super.initState(); // <-- Don't forget super.initState()
+    super.initState();
     _userId = _auth.currentUser?.uid;
     _fetchUserData();
   }
 
-  // --- MODIFIED: Fixed 'fullName' bug ---
   Future<void> _fetchUserData() async {
     if (_userId == null) {
       setState(() {
@@ -88,7 +87,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     );
   }
 
-  // --- NEW: Calculates all stats in one pass (for pie chart) ---
+  // --- Calculates all stats in one pass (for pie chart) ---
   Map<String, int> _calculateLeaveStats(List<QueryDocumentSnapshot> leaveDocs) {
     int approvedDays = 0;
     int pendingDays = 0;
@@ -284,6 +283,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
   Widget _buildPageContent(BuildContext context, int usedDays, int pendingDays,
       List<QueryDocumentSnapshot> leaveDocs) {
     // --- MODIFIED: More accurate remaining days calculation ---
+    // 'Remaining' means "available to book", so it must subtract pending days
     final int remainingDays =
     (totalLeaveEntitlement - usedDays - pendingDays)
         .clamp(0, totalLeaveEntitlement);
@@ -310,14 +310,15 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
                         color: Colors.green[800]),
                   ),
                   SizedBox(height: 16),
-                  // --- RE-ADDED: Pie Chart Widget ---
+                  // --- MODIFIED: Pie Chart call ---
                   SizedBox(
                     height: 150,
-                    child: _buildPieChart(
-                        context, usedDays, pendingDays, remainingDays),
+                    // Note: We don't pass 'pendingDays' to the pie chart builder
+                    child: _buildPieChart(context, usedDays,
+                        (totalLeaveEntitlement - usedDays)),
                   ),
                   SizedBox(height: 16),
-                  // --- MODIFIED: Row now includes "Pending" ---
+                  // --- MODIFIED: Row still includes "Pending" ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -498,7 +499,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     );
   }
 
-  // --- MODIFIED: This is the only version of _buildLeaveStat needed ---
+  /// Helper widget for the stats card
   Widget _buildLeaveStat(String label, String value,
       {bool isRemaining = false, Color? color}) {
     return Column(
@@ -524,7 +525,7 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
   Widget _buildTextField(TextEditingController controller, String label,
       IconData icon, VoidCallback? onTap,
       {int maxLines = 1}) {
-    return TextField(
+    return TextFormField(
       controller: controller,
       readOnly: onTap != null,
       maxLines: maxLines,
@@ -535,7 +536,8 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
         filled: true,
         fillColor: Colors.grey[100],
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none),
       ),
     );
   }
@@ -559,10 +561,14 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     );
   }
 
-  // --- Function to build the pie chart ---
+  // --- MODIFIED: Function to build the pie chart (no pending) ---
+  // Note: 'remainingDays' here is (Total - Used), not the 'available' balance
   Widget _buildPieChart(
-      BuildContext context, int usedDays, int pendingDays, int remainingDays) {
+      BuildContext context, int usedDays, int remainingDays) {
     List<PieChartSectionData> sections = [];
+
+    // We calculate a 'chart-specific' remaining, which ignores pending
+    int chartRemaining = (totalLeaveEntitlement - usedDays).clamp(0, totalLeaveEntitlement);
 
     if (usedDays > 0) {
       sections.add(PieChartSectionData(
@@ -574,22 +580,13 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
             fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
       ));
     }
-    if (pendingDays > 0) {
-      sections.add(PieChartSectionData(
-        color: Colors.orange[400],
-        value: pendingDays.toDouble(),
-        title: '$pendingDays\nPending',
-        radius: 50,
-        titleStyle: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
-      ));
-    }
+
     // Only show remaining if it's greater than 0
-    if (remainingDays > 0) {
+    if (chartRemaining > 0) {
       sections.add(PieChartSectionData(
         color: Colors.green[400],
-        value: remainingDays.toDouble(),
-        title: '$remainingDays\nFree',
+        value: chartRemaining.toDouble(),
+        title: '$chartRemaining\nFree',
         radius: 50,
         titleStyle: TextStyle(
             fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
