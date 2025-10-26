@@ -32,32 +32,22 @@ class _HomePageState extends State<HomePage> {
               height: 250,
               width: 350,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(15),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
                 image: const DecorationImage(
                   fit: BoxFit.cover,
-                  image: AssetImage("assets/images/products 1.png"),
+                  image: AssetImage("assets/images/uos.png"),
                 ),
               ),
             ),
             const SizedBox(height: 20),
             const Text(
-              'Welcome to the Cleaners App',
+              'Cleaners Management App',
               style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+                fontSize: 22,
+                color: Colors.white
               ),
             ),
             const SizedBox(height: 50),
-            Row(
+            /*Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
@@ -100,7 +90,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ],
-            ),
+            ),*/
             const SizedBox(height: 80),
             // Login buttons for supervisors and cleaners
             Row(
@@ -117,10 +107,11 @@ class _HomePageState extends State<HomePage> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
+                    backgroundColor: Color(0xFF440099),
                     padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.white, width: 2)
                     ),
                   ),
                   child: const Text(
@@ -140,19 +131,22 @@ class _HomePageState extends State<HomePage> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor: Color(0xFF440099),
                     padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.white, width: 2)
+
                     ),
                   ),
                   child: const Text(
-                    "Cleaners' Login",
+                    "Cleaners Login",
                     style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
             ),
+            SizedBox(height: 70,),
             const SizedBox(height: 20),
             // Admin panel button - now requires login
             ElevatedButton.icon(
@@ -165,11 +159,13 @@ class _HomePageState extends State<HomePage> {
                   ),
                 );
               },
+
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
+                backgroundColor: Color(0xFF440099),
                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Colors.white, width: 2)
                 ),
               ),
               icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
