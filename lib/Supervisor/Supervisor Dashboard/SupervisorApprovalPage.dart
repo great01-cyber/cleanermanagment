@@ -1,533 +1,108 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 
-class AnnualRequestPage extends StatefulWidget {
+class SupervisorApprovalPage extends StatefulWidget {
   @override
-  _LeaveRequestPageState createState() => _LeaveRequestPageState();
+  _SupervisorApprovalPageState createState() => _SupervisorApprovalPageState();
 }
 
-class _LeaveRequestPageState extends State<AnnualRequestPage> {
-  final TextEditingController _startDateController = TextEditingController();
-  final TextEditingController _endDateController = TextEditingController();
+// --- NEW: Add 'DefaultTabController' to manage tabs ---
+class _SupervisorApprovalPageState extends State<SupervisorApprovalPage>
+    with SingleTickerProviderStateMixin {
+
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final String? _supervisorId = FirebaseAuth.instance.currentUser?.uid;
   final TextEditingController _reasonController = TextEditingController();
 
-  // --- Firebase Instances ---
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  String? _userId;
+  // Calendar state
+  CalendarFormat _calendarFormat = CalendarFormat.month;
+  DateTime _focusedDay = DateTime.now();
 
-  // --- User Data State ---
-  String? _mySupervisorId;
-  String? _myUserName;
-  bool _isLoadingSupervisor = true; // Start as true
+  // --- Total leave days for calculation (same as employee page) ---
+  final int _totalLeaveEntitlement = 38;
 
-  // --- Leave Day State Variables ---
-  final int totalLeaveEntitlement = 38; // Total Annual Leave
-
-  @override
-  void initState() {
-    super.initState(); // <-- Don't forget super.initState()
-    _userId = _auth.currentUser?.uid;
-    _fetchUserData();
-  }
-
-  // --- MODIFIED: Fixed 'fullName' bug ---
-  Future<void> _fetchUserData() async {
-    if (_userId == null) {
-      setState(() {
-        _isLoadingSupervisor = false;
-      });
-      return;
-    }
-
+  // --- Approve/Decline functions (No changes needed) ---
+  Future<void> _approveRequest(String docId) async {
     try {
-      // Get the current user's document from the 'users' collection
-      // ! ADJUST 'users' and 'supervisorId'/'fullName' to match your database!
-      final userDoc = await _db.collection('users').doc(_userId).get();
-
-      if (userDoc.exists && userDoc.data() != null) {
-        final data = userDoc.data()!;
-
-        // Extract the supervisorId and userName
-        final supervisorId = data['supervisorId'] as String?;
-        // --- FIX: This should be the employee's name, not supervisor's ---
-        final name = data['fullName'] as String?; // or 'name', etc.
-
-        if (supervisorId == null || name == null) {
-          _showErrorSnackBar(
-              "Profile incomplete (missing supervisor or name). Contact admin.");
-        }
-
-        // Update the state
-        setState(() {
-          _mySupervisorId = supervisorId;
-          _myUserName = name;
-          _isLoadingSupervisor = false;
-        });
-      } else {
-        _showErrorSnackBar("Could not find your user profile. Contact admin.");
-        setState(() {
-          _isLoadingSupervisor = false;
-        });
-      }
-    } catch (e) {
-      print("Error fetching user data: $e");
-      _showErrorSnackBar("Error loading user data: $e");
-      setState(() {
-        _isLoadingSupervisor = false;
+      await _db.collection('leave_requests').doc(docId).update({
+        'status': 'Approved',
+        'supervisorReason': 'Approved',
       });
-    }
-  }
-
-  void _showErrorSnackBar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
-  }
-
-  // --- NEW: Calculates all stats in one pass (for pie chart) ---
-  Map<String, int> _calculateLeaveStats(List<QueryDocumentSnapshot> leaveDocs) {
-    int approvedDays = 0;
-    int pendingDays = 0;
-
-    for (var doc in leaveDocs) {
-      final data = doc.data() as Map<String, dynamic>;
-      // We only care about Annual Leave for this page
-      if (data["type"] == "Annual Leave") {
-        final Timestamp start = data['startDate'];
-        final Timestamp end = data['endDate'];
-        int days = _calculateDaysFromTimestamps(start, end);
-
-        if (data["status"] == "Approved") {
-          approvedDays += days;
-        } else if (data["status"] == "Pending") {
-          pendingDays += days;
-        }
-      }
-    }
-    return {'approved': approvedDays, 'pending': pendingDays};
-  }
-
-  /// Helper function to calculate from Timestamps
-  int _calculateDaysFromTimestamps(Timestamp start, Timestamp end) {
-    try {
-      final startDate = start.toDate();
-      final endDate = end.toDate();
-      // Add 1 to make the range inclusive
-      return endDate.difference(startDate).inDays + 1;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Request Approved"), backgroundColor: Colors.green));
     } catch (e) {
-      print("Error parsing date: $e");
-      return 0;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
-  // --- NEW: Function just for the Start Date ---
-  Future<void> _selectStartDate() async {
-    DateTime? picked = await showDatePicker(
+  Future<void> _declineRequest(String docId) async {
+    _reasonController.clear();
+    String? reason = await showDialog<String>(
       context: context,
-      initialDate: DateTime.now(),
-      // --- FIX: firstDate is now dynamic ---
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
-    );
-    if (picked != null) {
-      setState(() {
-        _startDateController.text = picked.toLocal().toString().split(' ')[0];
-        // --- NEW: Clear end date if start date changes ---
-        _endDateController.clear();
-      });
-    }
-  }
-
-  // --- NEW: Function just for the End Date ---
-  Future<void> _selectEndDate() async {
-    // Check if start date is selected first
-    if (_startDateController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please select a start date first")),
-      );
-      return;
-    }
-
-    final DateTime startDate = DateTime.parse(_startDateController.text);
-
-    DateTime? picked = await showDatePicker(
-      context: context,
-      // --- FIX: Initial and first dates are based on the start date ---
-      initialDate: startDate,
-      firstDate: startDate,
-      lastDate: DateTime(2030),
-    );
-    if (picked != null) {
-      setState(() {
-        _endDateController.text = picked.toLocal().toString().split(' ')[0];
-      });
-    }
-  }
-
-  // --- MODIFIED: Includes daysRequested field ---
-  Future<void> _submitLeaveRequest() async {
-    if (_startDateController.text.isEmpty ||
-        _endDateController.text.isEmpty ||
-        _reasonController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please fill in all fields")),
-      );
-      return;
-    }
-
-    if (_userId == null) {
-      _showErrorSnackBar("Error: You must be logged in.");
-      return;
-    }
-
-    if (_isLoadingSupervisor) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Still loading user data, please wait...")),
-      );
-      return;
-    }
-
-    if (_mySupervisorId == null || _myUserName == null) {
-      _showErrorSnackBar(
-          "Cannot submit: User profile is incomplete. Please contact admin.");
-      return;
-    }
-
-    try {
-      final DateTime startDate = DateTime.parse(_startDateController.text);
-      final DateTime endDate = DateTime.parse(_endDateController.text);
-
-      if (endDate.isBefore(startDate)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("End date cannot be before start date.")),
-        );
-        return;
-      }
-
-      // --- FIX: Define and calculate daysRequested HERE ---
-      final int daysRequested = endDate.difference(startDate).inDays + 1;
-
-      // --- Add data to Firestore 'leave_requests' collection ---
-      await _db.collection('leave_requests').add({
-        'userId': _userId,
-        'userName': _myUserName,
-        'supervisorId': _mySupervisorId,
-        'startDate': Timestamp.fromDate(startDate),
-        'endDate': Timestamp.fromDate(endDate),
-        'reason': _reasonController.text,
-        'daysRequested': daysRequested, // <-- THE FIX
-        'type': "Annual Leave",
-        'status': "Pending",
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Annual Leave request submitted successfully!")),
-      );
-
-      _startDateController.clear();
-      _endDateController.clear();
-      _reasonController.clear();
-    } catch (e) {
-      print("Error submitting leave request: $e");
-      _showErrorSnackBar("Error submitting request: $e");
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("Annual Leave Request",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.green,
-        elevation: 4,
-      ),
-      // --- MODIFIED: StreamBuilder now calculates all stats ---
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _db
-            .collection('leave_requests')
-            .where('userId', isEqualTo: _userId)
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          // Handle loading state
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
-          // Handle errors
-          if (snapshot.hasError) {
-            return Center(child: Text("Error loading data: ${snapshot.error}"));
-          }
-
-          // --- Data is loaded (or empty) ---
-          final leaveDocs = snapshot.data?.docs ?? [];
-
-          // --- MODIFIED: Calculate all stats for pie chart ---
-          final Map<String, int> stats = _calculateLeaveStats(leaveDocs);
-          final int usedDays = stats['approved'] ?? 0;
-          final int pendingDays = stats['pending'] ?? 0;
-
-          // --- MODIFIED: Pass all stats to the build method ---
-          return _buildPageContent(
-              context, usedDays, pendingDays, leaveDocs);
-        },
-      ),
-    );
-  }
-
-  // --- MODIFIED: Now accepts 'pendingDays' ---
-  Widget _buildPageContent(BuildContext context, int usedDays, int pendingDays,
-      List<QueryDocumentSnapshot> leaveDocs) {
-    // --- MODIFIED: More accurate remaining days calculation ---
-    final int remainingDays =
-    (totalLeaveEntitlement - usedDays - pendingDays)
-        .clamp(0, totalLeaveEntitlement);
-
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          // --- MODIFIED: Leave Counter Card now has Pie Chart ---
-          Card(
-            elevation: 5,
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            color: Colors.green[50],
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  Text(
-                    "Your Annual Leave Balance",
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[800]),
-                  ),
-                  SizedBox(height: 16),
-                  // --- RE-ADDED: Pie Chart Widget ---
-                  SizedBox(
-                    height: 150,
-                    child: _buildPieChart(
-                        context, usedDays, pendingDays, remainingDays),
-                  ),
-                  SizedBox(height: 16),
-                  // --- MODIFIED: Row now includes "Pending" ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildLeaveStat(
-                          "Total", totalLeaveEntitlement.toString()),
-                      _buildLeaveStat("Used", usedDays.toString(),
-                          color: Colors.red[700]),
-                      _buildLeaveStat("Pending", pendingDays.toString(),
-                          color: Colors.orange[700]),
-                      _buildLeaveStat("Remaining", remainingDays.toString(),
-                          isRemaining: true),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+      builder: (context) => AlertDialog(
+        title: Text('Reason for Decline'),
+        content: TextField(
+          controller: _reasonController,
+          autofocus: true,
+          decoration: InputDecoration(hintText: 'Enter reason here'),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
           ),
-          SizedBox(height: 20),
-
-          // --- Leave Request Form Card (FIXED) ---
-          Card(
-            elevation: 5,
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Request Annual Leave",
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green)),
-                  SizedBox(height: 15),
-                  // --- FIX: Calls the correct function ---
-                  _buildTextField(_startDateController, "Start Date",
-                      Icons.calendar_today, () => _selectStartDate()),
-                  SizedBox(height: 15),
-                  // --- FIX: Calls the correct function ---
-                  _buildTextField(_endDateController, "End Date",
-                      Icons.calendar_today, () => _selectEndDate()),
-                  SizedBox(height: 15),
-                  _buildTextField(_reasonController, "Reason", Icons.edit, null,
-                      maxLines: 3),
-                  SizedBox(height: 20),
-                  // --- FIX: Button is here, by itself ---
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed:
-                      _isLoadingSupervisor ? null : _submitLeaveRequest,
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        backgroundColor: Colors.green,
-                        disabledBackgroundColor: Colors.grey.shade400,
-                      ),
-                      // --- FIX: Child is the Text/Indicator ---
-                      child: _isLoadingSupervisor
-                          ? CircularProgressIndicator(color: Colors.white)
-                          : Text(
-                        "Submit Request",
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          TextButton(
+            child: Text('Submit'),
+            onPressed: () {
+              if (_reasonController.text.isNotEmpty) {
+                Navigator.pop(context, _reasonController.text);
+              }
+            },
           ),
-
-          SizedBox(height: 25),
-
-          Text("Leave Request History",
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green)),
-          SizedBox(height: 10),
-
-          // --- ListView.builder with "Decline Reason" logic ---
-          if (leaveDocs.isEmpty)
-            Center(child: Text("No leave requests found."))
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              itemCount: leaveDocs.length,
-              itemBuilder: (context, index) {
-                final doc = leaveDocs[index];
-                final data = doc.data() as Map<String, dynamic>;
-
-                final String type = data['type'] ?? 'Unknown';
-                final String status = data['status'] ?? 'Unknown';
-                final String reason =
-                    data['supervisorReason'] ?? 'No reason provided.';
-
-                final String startDate = (data['startDate'] as Timestamp)
-                    .toDate()
-                    .toLocal()
-                    .toString()
-                    .split(' ')[0];
-                final String endDate = (data['endDate'] as Timestamp)
-                    .toDate()
-                    .toLocal()
-                    .toString()
-                    .split(' ')[0];
-                final String dateRange = "$startDate to $endDate";
-
-                Color statusColor;
-                Color backgroundColor;
-                if (status == "Approved") {
-                  statusColor = Colors.green;
-                  backgroundColor = Colors.green[100]!;
-                } else if (status == "Pending") {
-                  statusColor = Colors.orange;
-                  backgroundColor = Colors.orange[100]!;
-                } else {
-                  statusColor = Colors.red;
-                  backgroundColor = Colors.red[100]!;
-                }
-
-                Widget trailingWidget;
-                if (status == "Declined") {
-                  trailingWidget = Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Chip(
-                        label: Text(status,
-                            style: TextStyle(color: statusColor)),
-                        backgroundColor: backgroundColor,
-                      ),
-                      SizedBox(width: 8),
-                      IconButton(
-                        icon: Icon(Icons.comment_rounded,
-                            color: Colors.blueGrey),
-                        onPressed: () => _showDeclineReason(reason),
-                        tooltip: 'View Reason',
-                      ),
-                    ],
-                  );
-                } else {
-                  trailingWidget = Chip(
-                    label:
-                    Text(status, style: TextStyle(color: statusColor)),
-                    backgroundColor: backgroundColor,
-                  );
-                }
-
-                return Card(
-                  color: Colors.grey[100],
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  child: ListTile(
-                    leading: Icon(
-                        type == "Annual Leave"
-                            ? Icons.beach_access
-                            : Icons.medical_services,
-                        color: Colors.green),
-                    title: Text(type,
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
-                    subtitle:
-                    Text(dateRange, style: TextStyle(fontSize: 14)),
-                    trailing: trailingWidget,
-                  ),
-                );
-              },
-            ),
         ],
       ),
     );
+    if (reason != null && reason.isNotEmpty) {
+      try {
+        await _db.collection('leave_requests').doc(docId).update({
+          'status': 'Declined',
+          'supervisorReason': reason,
+        });
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Request Declined"), backgroundColor: Colors.red));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    }
   }
 
-  // --- MODIFIED: This is the only version of _buildLeaveStat needed ---
-  Widget _buildLeaveStat(String label, String value,
-      {bool isRemaining = false, Color? color}) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-        ),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: isRemaining ? Colors.green[700] : (color ?? Colors.black87),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // --- Function to show the decline reason ---
-  void _showDeclineReason(String reason) {
+  // --- NEW: Helper to show who is off on a selected day ---
+  void _showEmployeesOffDialog(List<String> employees) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Reason for Decline"),
-        content: SingleChildScrollView(
-          child: Text(reason.isEmpty ? "No reason provided." : reason),
+        title: Text("Staff on Leave"),
+        content: Container(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: employees.length,
+            itemBuilder: (context, index) {
+              return ListTile(
+                leading: Icon(Icons.person_outline, color: Colors.blueAccent),
+                title: Text(employees[index]),
+              );
+            },
+          ),
         ),
         actions: [
           TextButton(
@@ -539,105 +114,342 @@ class _LeaveRequestPageState extends State<AnnualRequestPage> {
     );
   }
 
-  // --- Function to build the pie chart ---
-  Widget _buildPieChart(
-      BuildContext context, int usedDays, int pendingDays, int remainingDays) {
-    List<PieChartSectionData> sections = [];
+  // --- NEW: Helper to build the event map for the calendar ---
+  Map<DateTime, List<String>> _buildEventsMap(
+      List<QueryDocumentSnapshot> approvedDocs) {
+    Map<DateTime, List<String>> events = {};
+    for (var doc in approvedDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final String userName = data['userName'] ?? 'Unknown Employee';
+      final DateTime start = (data['startDate'] as Timestamp).toDate();
+      final DateTime end = (data['endDate'] as Timestamp).toDate();
 
-    if (usedDays > 0) {
-      sections.add(PieChartSectionData(
-        color: Colors.red[400],
-        value: usedDays.toDouble(),
-        title: '$usedDays\nUsed',
-        radius: 50,
-        titleStyle: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-      ));
+      for (var day = start;
+      day.isBefore(end.add(Duration(days: 1)));
+      day = day.add(Duration(days: 1))) {
+        final normalizedDay = DateTime.utc(day.year, day.month, day.day);
+        if (events[normalizedDay] == null) {
+          events[normalizedDay] = [];
+        }
+        // Avoid adding duplicate names for the same day (if logic allows)
+        if (!events[normalizedDay]!.contains(userName)) {
+          events[normalizedDay]!.add(userName);
+        }
+      }
     }
-    if (pendingDays > 0) {
-      sections.add(PieChartSectionData(
-        color: Colors.orange[400],
-        value: pendingDays.toDouble(),
-        title: '$pendingDays\nPending',
-        radius: 50,
-        titleStyle: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
-      ));
-    }
-    // Only show remaining if it's greater than 0
-    if (remainingDays > 0) {
-      sections.add(PieChartSectionData(
-        color: Colors.green[400],
-        value: remainingDays.toDouble(),
-        title: '$remainingDays\nFree',
-        radius: 50,
-        titleStyle: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
-      ));
-    }
+    return events;
+  }
 
-    // If all are 0, show a simple "empty" chart (full green)
-    if (sections.isEmpty) {
-      sections.add(PieChartSectionData(
-        color: Colors.green[400], // Start with a full "Free" chart
-        value: totalLeaveEntitlement.toDouble(),
-        title: '$totalLeaveEntitlement\nFree',
-        radius: 50,
-        titleStyle: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
-      ));
-    }
+  // --- NEW: Helper to calculate balances for all employees ---
+  Map<String, int> _calculateAllBalances(
+      List<QueryDocumentSnapshot> approvedDocs) {
+    Map<String, int> usedDaysMap = {};
+    for (var doc in approvedDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      // We only care about Annual Leave for balances
+      if (data['type'] == 'Annual Leave') {
+        final String userId = data['userId'];
+        // Use 'daysRequested' field, default to 0 if null
+        final int days = (data['daysRequested'] as int?) ?? 0;
 
-    return PieChart(
-      PieChartData(
-        pieTouchData: PieTouchData(
-          touchCallback: (FlTouchEvent event, pieTouchResponse) {
-            // you can implement touch interactions here
+        if (usedDaysMap[userId] == null) {
+          usedDaysMap[userId] = 0;
+        }
+        usedDaysMap[userId] = usedDaysMap[userId]! + days;
+      }
+    }
+    return usedDaysMap;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // --- NEW: Use DefaultTabController to wrap the Scaffold ---
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text("Supervisor Dashboard"),
+          backgroundColor: Colors.blueAccent,
+          // --- NEW: Add the TabBar ---
+          bottom: TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.pending_actions), text: "Approvals"),
+              Tab(icon: Icon(Icons.group), text: "Team Balances"),
+            ],
+          ),
+        ),
+        // --- MODIFIED: The body is one main StreamBuilder ---
+        // This stream provides data to BOTH tabs efficiently
+        body: StreamBuilder<QuerySnapshot>(
+          stream: _db
+              .collection('leave_requests')
+              .where('supervisorId', isEqualTo: _supervisorId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text("Error: ${snapshot.error}"));
+            }
+            if (!snapshot.hasData) {
+              return Center(child: Text("No data found."));
+            }
+
+            // --- NEW: Process all data here, once ---
+            final allDocs = snapshot.data!.docs;
+
+            final pendingDocs = allDocs
+                .where((doc) => (doc.data() as Map)['status'] == 'Pending')
+                .toList();
+
+            final approvedDocs = allDocs
+                .where((doc) => (doc.data() as Map)['status'] == 'Approved')
+                .toList();
+
+            // Data for Tab 1 (Calendar)
+            final approvedEventsMap = _buildEventsMap(approvedDocs);
+
+            // Data for Tab 2 (Balances)
+            // We pass *all* approved docs, _calculateAllBalances will filter by type
+            final usedDaysMap = _calculateAllBalances(approvedDocs);
+
+            // --- NEW: Return the TabBarView ---
+            return TabBarView(
+              children: [
+                // --- Tab 1: Approvals & Calendar ---
+                _buildApprovalTab(pendingDocs, approvedEventsMap),
+                // --- Tab 2: Team Balances ---
+                _buildBalancesTab(usedDaysMap),
+              ],
+            );
           },
         ),
-        borderData: FlBorderData(show: false),
-        sectionsSpace: 2,
-        centerSpaceRadius: 40,
-        sections: sections,
       ),
     );
   }
 
-  // --- *** THIS WAS THE MISSING FUNCTION *** ---
-  /// Helper widget for building text fields
-  Widget _buildTextField(
-      TextEditingController controller,
-      String label,
-      IconData icon,
-      VoidCallback? onTap, {
-        int maxLines = 1,
-      }) {
-    return TextFormField(
-      controller: controller,
-      readOnly: onTap != null,
-      onTap: onTap,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: Colors.green),
-        prefixIcon: Icon(icon, color: Colors.green),
-        filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.0),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8.0),
-          borderSide: BorderSide(color: Colors.green, width: 2),
+  // --- NEW: Widget for the "Approvals" tab ---
+  Widget _buildApprovalTab(List<QueryDocumentSnapshot> pendingDocs,
+      Map<DateTime, List<String>> approvedEventsMap) {
+    // --- NEW: Wrap in SingleChildScrollView to make it all scrollable ---
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // --- SECTION 1: Pending Requests List ---
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Text(
+              "Pending Requests",
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          ),
+          // --- MODIFIED: Use shrinkWrap & NeverScrollable physics ---
+          if (pendingDocs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Center(child: Text("No pending requests.")),
+            )
+          else
+            ListView.builder(
+              itemCount: pendingDocs.length,
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemBuilder: (context, index) {
+                var doc = pendingDocs[index];
+                var data = doc.data() as Map<String, dynamic>;
+                String formatDate(Timestamp ts) =>
+                    DateFormat('EEE, MMM d, yyyy').format(ts.toDate());
+                final String dateRange =
+                    "${formatDate(data['startDate'])} to ${formatDate(data['endDate'])}";
+
+                final String leaveType = data['type'] ?? 'Leave';
+                final Color typeColor = (leaveType == 'Annual Leave')
+                    ? Colors.blueAccent
+                    : Colors.orange[700]!;
+
+                return Card(
+                  margin: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  elevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data['userName'] ?? 'Unknown',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "$leaveType: ${data['daysRequested'] ?? '?'} days",
+                          style:
+                          TextStyle(fontSize: 16, color: typeColor, fontWeight: FontWeight.w500),
+                        ),
+                        Text(dateRange,
+                            style: TextStyle(fontStyle: FontStyle.italic)),
+                        SizedBox(height: 8),
+                        Text("Reason: ${data['reason']}"),
+                        SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.close_rounded,
+                                  color: Colors.red, size: 30),
+                              onPressed: () => _declineRequest(doc.id),
+                            ),
+                            SizedBox(width: 16),
+                            IconButton(
+                              icon: Icon(Icons.check_rounded,
+                                  color: Colors.green, size: 30),
+                              onPressed: () => _approveRequest(doc.id),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          Divider(thickness: 2, height: 20, indent: 20, endIndent: 20),
+          // --- SECTION 2: Team Calendar ---
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Text(
+              "Team Leave Calendar",
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          ),
+          _buildTeamCalendar(approvedEventsMap),
+        ],
+      ),
+    );
+  }
+
+  // --- NEW: Helper widget to build the calendar ---
+  Widget _buildTeamCalendar(Map<DateTime, List<String>> events) {
+    return Card(
+      margin: EdgeInsets.all(12),
+      elevation: 4,
+      child: TableCalendar(
+        firstDay: DateTime.utc(2020, 1, 1),
+        lastDay: DateTime.utc(2030, 12, 31),
+        focusedDay: _focusedDay,
+        calendarFormat: _calendarFormat,
+        eventLoader: (day) {
+          final normalizedDay = DateTime.utc(day.year, day.month, day.day);
+          return events[normalizedDay] ?? [];
+        },
+        onFormatChanged: (format) {
+          setState(() {
+            _calendarFormat = format;
+          });
+        },
+        onDaySelected: (selectedDay, focusedDay) {
+          setState(() {
+            _focusedDay = focusedDay;
+          });
+          final normalizedDay =
+          DateTime.utc(selectedDay.year, selectedDay.month, selectedDay.day);
+          final employeesOff = events[normalizedDay];
+          if (employeesOff != null && employeesOff.isNotEmpty) {
+            _showEmployeesOffDialog(employeesOff);
+          }
+        },
+        calendarStyle: CalendarStyle(
+          // --- Style the markers ---
+          markersMaxCount: 1,
+          markerDecoration: BoxDecoration(
+            color: Colors.red[700],
+            shape: BoxShape.circle,
+          ),
         ),
       ),
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter $label';
-        }
-        return null;
-      },
     );
+  }
+
+  // --- NEW: Widget for the "Team Balances" tab ---
+  // --- *** THIS IS THE COMPLETED METHOD *** ---
+  Widget _buildBalancesTab(Map<String, int> usedDaysMap) {
+    return StreamBuilder<QuerySnapshot>(
+      // This stream finds all 'users' who are assigned to this supervisor
+        stream: _db
+            .collection('users')
+            .where('supervisorId', isEqualTo: _supervisorId)
+            .orderBy('fullName') // Sort alphabetically by name
+            .snapshots(),
+        builder: (context, userSnapshot) {
+          if (userSnapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+          if (!userSnapshot.hasData || userSnapshot.data!.docs.isEmpty) {
+            return Center(child: Text("No employees found on your team."));
+          }
+
+          final employeeDocs = userSnapshot.data!.docs;
+
+          return ListView.builder(
+              padding: EdgeInsets.all(8),
+              itemCount: employeeDocs.length,
+              itemBuilder: (context, index) {
+                final userDoc = employeeDocs[index];
+                final data = userDoc.data() as Map<String, dynamic>;
+                final String userName = data['fullName'] ?? 'Unknown Employee';
+
+                // Get the user's ID
+                final String userId = userDoc.id;
+
+                // Get the used days from the map, defaulting to 0
+                final int usedDays = usedDaysMap[userId] ?? 0;
+
+                // Calculate remaining days
+                final int remainingDays = _totalLeaveEntitlement - usedDays;
+
+                return Card(
+                  elevation: 3,
+                  margin: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.blueAccent[100],
+                      child: Text(
+                        userName.isNotEmpty ? userName[0] : '?',
+                        style: TextStyle(color: Colors.blueAccent[700]),
+                      ),
+                    ),
+                    title: Text(
+                      userName,
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    subtitle: Text(
+                        "Used: $usedDays / $_totalLeaveEntitlement"
+                    ),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          "Remaining",
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                        Text(
+                          "$remainingDays",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: remainingDays > 10
+                                ? Colors.green[700]
+                                : Colors.red[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              });
+        });
   }
 }
