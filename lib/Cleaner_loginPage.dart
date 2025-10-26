@@ -106,7 +106,7 @@ class _CleanersLoginPageState extends State<CleanersLoginPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Cleaners Login Page"),
-        backgroundColor: const Color(0xFFCB2B93),
+        backgroundColor: const Color(0xFFFFFF),
       ),
       body: Container(
         height: MediaQuery.of(context).size.height,

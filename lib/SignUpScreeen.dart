@@ -30,9 +30,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              hexStringToColor("CB2B93"),
-              hexStringToColor("9546c4"),
-              hexStringToColor("5E61F4")
+              Color(0xFFFFFFFF),
+              Color(0xFF440099),
+              Color(0xFF440099),
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -44,6 +44,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 20, MediaQuery.of(context).size.height * 0.2, 20, 0),
             child: Column(
               children: <Widget>[
+                Container(
+                  height: 200,
+                  width: 400,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    image: DecorationImage(
+                      image: AssetImage('assets/images/uos.png'), // replace with your asset path, // optional
+                    ),
+                  ),
+                ),
                 SizedBox(
                   height: 30,
                 ),

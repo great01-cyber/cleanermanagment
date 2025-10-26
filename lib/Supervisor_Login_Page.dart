@@ -108,7 +108,7 @@ class _SupervisorLoginPageState extends State<SupervisorLoginPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Supervisor Login Page"),
-        backgroundColor: Color(0xFFCB2B93),
+        backgroundColor: Color(0xFFFFFFF),
       ),
       body: Container(
         height: MediaQuery
@@ -137,7 +137,7 @@ class _SupervisorLoginPageState extends State<SupervisorLoginPage> {
                 .height * 0.2, 20, 0),
             child: Column(
               children: <Widget>[
-                logoWidget("assets/images/housekeeping.png"),
+                logoWidget("assets/images/supervisor.png"),
                 SizedBox(
                   height: 30,
                 ),
