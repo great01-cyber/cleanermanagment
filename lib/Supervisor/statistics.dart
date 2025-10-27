@@ -46,7 +46,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
       // It assumes you have a collection 'inventory_logs' with a 'timestamp' field.
       // Make sure you have a Firestore index for this query.
       final querySnapshot = await FirebaseFirestore.instance
-          .collection('inventory_transactions')
+          .collection('inventory_logs')
           .where('timestamp', isGreaterThanOrEqualTo: thirtyDaysAgo)
           .orderBy('timestamp', descending: true)
           .get();
@@ -78,7 +78,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
     for (var doc in logs) {
       final data = doc.data() as Map<String, dynamic>;
-      final String productName = data['itemId'] ?? 'Unknown';
+      final String productName = data['productName'] ?? 'Unknown';
       final int quantity = data['quantity'] ?? 0;
 
       // Add to product counts

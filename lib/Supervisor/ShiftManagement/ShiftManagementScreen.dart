@@ -346,8 +346,9 @@ class _ShiftManagementScreenState extends State<ShiftManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Shift Management'),
-        backgroundColor: Colors.blue,
+        title: const Text('Shift Management', style: TextStyle(color: Colors.white),),
+        backgroundColor: Color(0xFF440099),
+
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

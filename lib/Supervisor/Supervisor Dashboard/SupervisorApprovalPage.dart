@@ -168,7 +168,7 @@ class _SupervisorApprovalPageState extends State<SupervisorApprovalPage>
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: Text("Supervisor Dashboard"),
+          title: Text("Annual Leave Request"),
           backgroundColor: Colors.blueAccent,
           // --- NEW: Add the TabBar ---
           bottom: TabBar(

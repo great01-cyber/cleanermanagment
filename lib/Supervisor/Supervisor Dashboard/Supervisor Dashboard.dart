@@ -1,3 +1,4 @@
+import 'package:cleanerapplication/Supervisor/Supervisor%20Dashboard/supervisorTodolist.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // <-- ADDED: Missing import
@@ -8,9 +9,10 @@ import '../../HomePage.dart';
 import '../../Services/CreateNotification.dart';
 import '../../Services/Notification.dart' as notification_provider;
 import '../ReportsIssues.dart';
+import '../statistics.dart';
 import 'AssignTask.dart';
 import 'OrderSuppliesPage.dart';
-import 'PostMessage.dart';
+import 'PostMessage.dart' hide StatisticsPage;
 import 'PostShifts.dart';
 import 'StoreInventoryPage.dart';
 import '../ShiftManagement/ShiftManagementScreen.dart';
@@ -147,15 +149,16 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     return [
       _buildDrawerTile(context, 'Post Shifts', Icons.post_add, PostShifts()),
       _buildDrawerTile(context, 'Assign Tasks', Icons.assignment_ind, AssignTasks()),
-      _buildDrawerTile(context, 'My Todo List', Icons.checklist, AssignTasks()), // <-- FIXED: Corrected page
+      _buildDrawerTile(context, 'My Todo List', Icons.checklist, supervisorTodolist()), // <-- FIXED: Corrected page
       _buildDrawerTile(context, 'Annual Leave Request', Icons.event_available, SupervisorApprovalPage()),
-      _buildDrawerTile(context, 'Post Message', Icons.message, PostMessage()),
+      _buildDrawerTile(context, 'Post Message', Icons.message, StatisticsPage()),
       _buildDrawerTile(context, 'Create Notification', Icons.notifications, CreateNotification()),
       _buildDrawerTile(context, 'Store Inventory', Icons.store, StoreInventoryPage()),
       _buildDrawerTile(context, 'Create Vouchers', Icons.card_giftcard, CreateVouchers()),
       _buildDrawerTile(context, 'Reports', Icons.assessment, ReportsIssuesS()),
       _buildDrawerTile(context, 'Report Accidents', Icons.warning, CleanerReportAccidents()),
-      _buildDrawerTile(context, 'Emergency', Icons.emergency, AssignTasks()), // <-- FIXED: Corrected page
+      _buildDrawerTile(context, 'Emergency', Icons.emergency, AssignTasks()),
+      _buildDrawerTile(context, 'Emergency', Icons.emergency, StatisticsPage()),// <-- FIXED: Corrected page
       const Divider(),
       ListTile(
         leading: const Icon(Icons.logout, color: Colors.redAccent),
@@ -186,10 +189,10 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       _buildDashboardButton(context, 'Post Shifts', Icons.post_add, Colors.blue[700]!, PostShifts()),
       _buildDashboardButton(context, 'Assign Tasks', Icons.assignment_ind, Colors.blue[600]!, AssignTasks()),
       _buildDashboardButton(context, 'Annual Leave', Icons.event_available, Colors.indigo[300]!, SupervisorApprovalPage()),
-      _buildDashboardButton(context, 'My Todo List', Icons.checklist, Colors.blueGrey[700]!, AssignTasks()), // <-- FIXED: Corrected page
+      _buildDashboardButton(context, 'My Todo List', Icons.checklist, Colors.blueGrey[700]!, supervisorTodolist()), // <-- FIXED: Corrected page
 
       // --- Communication (Purple Family) ---
-      _buildDashboardButton(context, 'Post Message', Icons.message, Colors.deepPurple, PostMessage()),
+      _buildDashboardButton(context, 'Post Message', Icons.message, Colors.deepPurple, StatisticsPage()),
       _buildDashboardButton(context, 'Create Notification', Icons.notifications_active, Colors.purple, CreateNotification()),
 
       // --- Logistics & Inventory (Green/Teal Family) ---

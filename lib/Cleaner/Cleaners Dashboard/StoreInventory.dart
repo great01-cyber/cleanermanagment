@@ -321,6 +321,4 @@ class _StoreInventoryState extends State<StoreInventory> {
       },
     );
   }
-
-
 }
