@@ -32,12 +32,14 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('Supervisor Dashboard'),
+        title: const Text('Supervisor Dashboard', style: TextStyle(
+          color: Colors.white
+        ),),
         backgroundColor: Color(0xFF440099),
         actions: [
           // Refresh button
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: Colors.white,),
             onPressed: () {
               // Refresh the dashboard
               setState(() {});
@@ -48,9 +50,9 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
               return Stack(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.notifications, size: 30),
+                    icon: const Icon(Icons.notifications, size: 30, color: Colors.white,),
                     onPressed: () {
-                      _scaffoldKey.currentState!.openEndDrawer(); // Open notification drawer
+                      _scaffoldKey.currentState!.openEndDrawer();
                     },
                   ),
                   if (notificationProvider.notifications.isNotEmpty)

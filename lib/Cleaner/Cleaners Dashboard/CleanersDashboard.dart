@@ -43,16 +43,16 @@ class _CleanersDashboardState extends State<CleanersDashboard> {
         // Provider not available, skip initialization
       }
     });
-    
+
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('Cleaners Dashboard'),
-        backgroundColor: Colors.green,
+        title: const Text('Cleaners Dashboard', style: TextStyle(color: Colors.white),),
+        backgroundColor: Color(0xFF440099),
         actions: [
           // Refresh button
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: Colors.white,),
             onPressed: () {
               // Refresh the dashboard
               setState(() {});
@@ -63,7 +63,7 @@ class _CleanersDashboardState extends State<CleanersDashboard> {
               return Stack(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.notifications, size: 30),
+                    icon: const Icon(Icons.notifications, size: 30, color: Colors.white,),
                     onPressed: () {
                       _scaffoldKey.currentState!.openEndDrawer(); // Open notification drawer
                     },
@@ -96,20 +96,29 @@ class _CleanersDashboardState extends State<CleanersDashboard> {
         padding: const EdgeInsets.all(16),
         childAspectRatio: 1.5,
         children: [
-            _buildDashboardButton('My Tasks', Icons.assignment, Colors.deepPurple, () => Navigator.push(context, MaterialPageRoute(builder: (context) => MyTasks()))),
-            _buildDashboardButton('Shift History', Icons.history, Colors.indigo, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ShiftHistoryScreen()))),
-            _buildDashboardButton('Notifications', Icons.notifications, Colors.purple, () => Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationScreen()))),
-            _buildDashboardButton('Store Inventory', Icons.inventory, Colors.blue, () => Navigator.push(context, MaterialPageRoute(builder: (context) => StoreInventory()))),
-          _buildDashboardButton('Reports Issues', Icons.report_problem, Colors.orange, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ReportsIssues()))),
-          _buildDashboardButton('Users Training', Icons.school, Colors.purple, () => Navigator.push(context, MaterialPageRoute(builder: (context) => EnhancedUserTraining()))),
+          // --- Core Tasks (Blue/Indigo Family) ---
+          _buildDashboardButton('My Tasks', Icons.task_alt, Colors.blue[700]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => MyTasks()))),
+          _buildDashboardButton('See Shifts', Icons.calendar_today, Colors.blue[500]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => SeeShifts()))),
+          _buildDashboardButton('To-Do List', Icons.checklist, Colors.lightBlue[600]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ToDoList()))),
+          _buildDashboardButton('QR Scanning', Icons.qr_code_scanner, Colors.indigo[700]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => QrScanning()))),
+
+// --- Logistics & Admin (Green Family) ---
+          _buildDashboardButton('Store Inventory', Icons.inventory_2, Colors.green[800]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => StoreInventory()))),
+          _buildDashboardButton('Annual Leave', Icons.event_available, Colors.green[600]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => AnnualRequestPage()))),
+
+// --- History & Info (Grey/Purple Family) ---
+          _buildDashboardButton('Shift History', Icons.history, Colors.grey[700]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ShiftHistoryScreen()))),
+          _buildDashboardButton('See Tickets', Icons.receipt_long, Colors.deepPurple[400]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => SeeTickets()))),
+
+// --- Community & Training (Teal/Purple Family) ---
+          _buildDashboardButton('Notifications', Icons.notifications, Colors.purple[500]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationScreen()))),
+          _buildDashboardButton('Users Training', Icons.school, Colors.purple[300]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => EnhancedUserTraining()))),
           _buildDashboardButton('Social Board', Icons.group, Colors.teal, () => Navigator.push(context, MaterialPageRoute(builder: (context) => SocialBoardPage()))),
-          _buildDashboardButton('See Shifts', Icons.room, Colors.green, () => Navigator.push(context, MaterialPageRoute(builder: (context) => SeeShifts()))),
-          _buildDashboardButton('Annual Leave', Icons.comment, Colors.red, () => Navigator.push(context, MaterialPageRoute(builder: (context) => AnnualRequestPage()))),
-          _buildDashboardButton('QR Scanning', Icons.qr_code, Colors.amber, () => Navigator.push(context, MaterialPageRoute(builder: (context) => QrScanning()))),
-          _buildDashboardButton('See Tickets', Icons.assignment, Colors.indigo, () => Navigator.push(context, MaterialPageRoute(builder: (context) => SeeTickets()))),
-          _buildDashboardButton('To-Do List', Icons.list, Colors.cyan, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ToDoList()))),
-          _buildDashboardButton('Safety Rules', Icons.safety_check, Colors.blue, () => Navigator.push(context, MaterialPageRoute(builder: (context) => SafetyRules()))),
-          _buildDashboardButton('Report Accidents', Icons.safety_check, Colors.pink, () => Navigator.push(context, MaterialPageRoute(builder: (context) =>CleanerReportAccidents()))),
+
+// --- Safety & Alerts (Red/Orange Family) ---
+          _buildDashboardButton('Report Accidents', Icons.warning, Colors.red[700]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => CleanerReportAccidents()))),
+          _buildDashboardButton('Reports Issues', Icons.report_problem, Colors.orange[600]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ReportsIssues()))),
+          _buildDashboardButton('Safety Rules', Icons.safety_check, Colors.amber[700]!, () => Navigator.push(context, MaterialPageRoute(builder: (context) => SafetyRules()))),
         ],
       ),
     );
