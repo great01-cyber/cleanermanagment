@@ -192,7 +192,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       _buildDashboardButton(context, 'My Todo List', Icons.checklist, Colors.blueGrey[700]!, supervisorTodolist()), // <-- FIXED: Corrected page
 
       // --- Communication (Purple Family) ---
-      _buildDashboardButton(context, 'Post Message', Icons.message, Colors.deepPurple, StatisticsPage()),
+      _buildDashboardButton(context, 'Statistics', Icons.message, Colors.deepPurple, StatisticsPage()),
       _buildDashboardButton(context, 'Create Notification', Icons.notifications_active, Colors.purple, CreateNotification()),
 
       // --- Logistics & Inventory (Green/Teal Family) ---

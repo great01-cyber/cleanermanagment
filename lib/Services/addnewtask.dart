@@ -34,12 +34,12 @@ class _AddNewTaskState extends State<AddNewTask> {
     try {
       final id = const Uuid().v4();
       final imagesRef =
-      FirebaseStorage.instance.ref('images').child(id); // images/${id}
+      //FirebaseStorage.instance.ref('images').child(id); // images/${id}
 
-      final uploadTask = imagesRef.putFile(file!);
-      final taskSnapshot = await uploadTask;
+      //final uploadTask = imagesRef.putFile(file!);
+      //final taskSnapshot = await uploadTask;
 
-      final imageURL = await taskSnapshot.ref.getDownloadURL();
+      //final imageURL = await taskSnapshot.ref.getDownloadURL();
 
       await FirebaseFirestore.instance.collection("todolist").doc(id).set({
         "title": titleController.text.trim(),
@@ -48,7 +48,7 @@ class _AddNewTaskState extends State<AddNewTask> {
         "creator": FirebaseAuth.instance.currentUser!.uid,
         "postedAt": FieldValue.serverTimestamp(),
         "color": rgbToHex(_selectedColor),
-        "imageURL": imageURL,
+        //"imageURL": imageURL,
       });
       print(id);
     } catch (e) {
